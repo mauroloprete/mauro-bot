@@ -58,7 +58,6 @@ targets:
     mode: production
     workspace:
       host: https://adb-7405619081216020.0.azuredatabricks.net
-      profile: mauro_premium
     run_as:
       user_name: mauroloprete@mauroloprete558.onmicrosoft.com
     variables:
