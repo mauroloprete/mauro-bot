@@ -1,0 +1,65 @@
+bundle:
+  name: soporte-bot
+
+variables:
+  catalog:
+    default: dev_bronze
+  schema:
+    default: labs
+
+resources:
+  experiments:
+    agent_experiment:
+      name: /Users/${workspace.current_user.userName}/soporte-bot
+
+  registered_models:
+    soporte_bot_model:
+      name: soporte_bot
+      catalog_name: ${var.catalog}
+      schema_name: ${var.schema}
+
+  model_serving_endpoints:
+    agent_endpoint:
+      name: soporte-bot-${bundle.target}
+      config:
+        served_entities:
+          - entity_name: ${var.catalog}.${var.schema}.soporte_bot
+            entity_version: "5"
+            workload_size: Small
+            scale_to_zero_enabled: true
+      ai_gateway:
+        rate_limits:
+          - key: user
+            renewal_period: minute
+            calls: 20
+
+  jobs:
+    refresh_index:
+      name: "[${bundle.target}] Refresh Vector Index"
+      tasks:
+        - task_key: refresh
+          notebook_task:
+            notebook_path: ./src/refresh_index.py
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"
+        timezone_id: "America/Montevideo"
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://adb-7405619081216020.0.azuredatabricks.net
+      profile: mauro_premium
+    variables:
+      catalog: dev_bronze
+
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-7405619081216020.0.azuredatabricks.net
+      profile: mauro_premium
+    run_as:
+      user_name: mauroloprete@mauroloprete558.onmicrosoft.com
+    variables:
+      catalog: pro_bronze
