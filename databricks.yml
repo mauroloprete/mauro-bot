@@ -7,7 +7,7 @@ variables:
   schema:
     default: labs
   lakebase_project_id:
-    default: maurobot-memory
+    default: mauro-bot-memory
   llm_endpoint:
     default: databricks-meta-llama-3-3-70b-instruct
 
@@ -54,8 +54,25 @@ resources:
             safety: true
             pii:
               behavior: BLOCK
+            invalid_keywords:
+              - "ignore previous instructions"
+              - "ignore your instructions"
+              - "olvida tus instrucciones"
+              - "ignora tus instrucciones"
+            valid_topics:
+              - "Databricks"
+              - "Data Engineering"
+              - "Delta Lake"
+              - "Apache Spark"
+              - "MLOps"
+              - "MLflow"
+              - "SQL"
+              - "ETL"
+              - "Data Architecture"
           output:
             safety: true
+            pii:
+              behavior: BLOCK
 
   vector_search_endpoints:
     mauro_bot_vs:
@@ -80,7 +97,7 @@ resources:
             base_parameters:
               catalog: ${var.catalog}
               schema: ${var.schema}
-              vs_endpoint_name: ${resources.vector_search_endpoints.mauro_bot_vs.name}
+              vs_endpoint_name: mauro-bot-vs
       schedule:
         quartz_cron_expression: "0 0 6 * * ?"
         timezone_id: "America/Montevideo"
@@ -112,10 +129,12 @@ resources:
             database: "projects/${var.lakebase_project_id}/branches/production/databases/databricks-postgres"
             permission: CAN_CONNECT_AND_CREATE
 
-  postgres_projects:
-    mauro_bot_memory:
-      project_id: maurobot-memory
-      display_name: Mauro Bot Memory Store
+  # postgres_projects omitido: bug #5183 — siempre hace POST,
+  # falla con "already exists" en re-deploy. Crear via UI o CLI.
+  # postgres_projects:
+  #   mauro_bot_memory:
+  #     project_id: maurobot-memory
+  #     display_name: Mauro Bot Memory Store
 
 targets:
   dev:
@@ -135,3 +154,6 @@ targets:
       user_name: ${workspace.current_user.userName}
     variables:
       catalog: pro_bronze
+    resources:
+      # Bug #5183: siempre hace POST. Ya creado via UI.
+      postgres_projects: null
