@@ -86,7 +86,7 @@ resources:
   apps:
     mauro_bot_app:
       name: mauro-bot
-      description: "RAG chatbot — Spark de Ideas blog (AI Gateway V2)"
+      description: "[${bundle.target}] RAG chatbot — Spark de Ideas blog (AI Gateway V2)"
       source_code_path: ./
       user_api_scopes:
         - ai-gateway
