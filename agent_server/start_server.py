@@ -10,10 +10,13 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
 
 import logging
 
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 from fastapi.responses import HTMLResponse
 from databricks_ai_bridge.long_running import LongRunningAgentServer
 from mlflow.genai.agent_server import setup_mlflow_git_based_version_tracking
 
+from agent_server.agent import _user_token
 from agent_server.utils_memory import init_lakebase_config, lakebase_context, set_lakebase_resources
 
 logger = logging.getLogger(__name__)
@@ -29,6 +32,21 @@ agent_server = LongRunningAgentServer(
 )
 
 app = agent_server.app
+
+
+class UserTokenMiddleware(BaseHTTPMiddleware):
+    """Captura x-forwarded-access-token y lo inyecta en el ContextVar."""
+
+    async def dispatch(self, request: Request, call_next):
+        token = request.headers.get("x-forwarded-access-token")
+        tok = _user_token.set(token)
+        try:
+            return await call_next(request)
+        finally:
+            _user_token.reset(tok)
+
+
+app.add_middleware(UserTokenMiddleware)
 
 try:
     setup_mlflow_git_based_version_tracking()

@@ -1,3 +1,4 @@
+import contextvars
 import logging
 import os
 from typing import Any, AsyncGenerator, Sequence, TypedDict
@@ -14,10 +15,15 @@ from mlflow.types.responses import (
     ResponsesAgentStreamEvent,
     to_chat_completions_input,
 )
-from openai import BadRequestError
+from openai import BadRequestError, OpenAI
 from typing_extensions import Annotated
 
 from agent_server.utils_memory import get_lakebase_resources
+
+# Token del usuario logueado (on-behalf-of-user auth)
+_user_token: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "_user_token", default=None
+)
 
 logger = logging.getLogger(__name__)
 mlflow.langchain.autolog()
@@ -53,6 +59,7 @@ SYSTEM_PROMPT = (
 class AgentState(TypedDict, total=False):
     messages: Annotated[Sequence[AnyMessage], add_messages]
     context: str
+    user_token: str | None
 
 
 _w = None
@@ -66,10 +73,23 @@ def _get_workspace():
     return _w
 
 
-def _get_llm_client():
+def _get_llm_client(user_token: str | None = None):
+    """Devuelve el cliente LLM.
+
+    Cuando USE_AI_GATEWAY=True y hay un user token (on-behalf-of-user),
+    crea un OpenAI client apuntando a /ai-gateway/mlflow/v1 con el token
+    del usuario. Esto permite que los guardrails de AI Gateway V2 apliquen.
+    Sin user token, cae al DatabricksOpenAI con credenciales del SP.
+    """
+    if USE_AI_GATEWAY and user_token:
+        host = os.getenv("DATABRICKS_HOST", "")
+        return OpenAI(
+            api_key=user_token,
+            base_url=f"https://{host}/ai-gateway/mlflow/v1",
+        )
     global _llm_client
     if _llm_client is None:
-        _llm_client = DatabricksOpenAI(use_ai_gateway=USE_AI_GATEWAY)
+        _llm_client = DatabricksOpenAI(use_ai_gateway=False)
     return _llm_client
 
 
@@ -92,7 +112,7 @@ def retrieve(state: AgentState):
 
 def generate(state: AgentState):
     context = state.get("context", "")
-    client = _get_llm_client()
+    client = _get_llm_client(user_token=state.get("user_token"))
     messages = [
         {"role": "system", "content": f"{SYSTEM_PROMPT}\n\nContexto:\n{context}"},
         *[
@@ -178,10 +198,12 @@ async def stream_handler(
     mlflow.update_current_trace(metadata={"mlflow.trace.session": thread_id})
 
     config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
+    user_token = _user_token.get()
     input_state = {
         "messages": to_chat_completions_input(
             [i.model_dump() for i in request.input]
         ),
+        "user_token": user_token,
     }
 
     checkpointer, _store = get_lakebase_resources()

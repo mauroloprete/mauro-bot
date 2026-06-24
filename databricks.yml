@@ -88,6 +88,8 @@ resources:
       name: mauro-bot
       description: "RAG chatbot — Spark de Ideas blog (AI Gateway V2)"
       source_code_path: ./
+      user_api_scopes:
+        - ai-gateway
       config:
         command: ["uv", "run", "start-app"]
         env:
@@ -111,6 +113,10 @@ resources:
             branch: "projects/${var.lakebase_project_id}/branches/production"
             database: "projects/${var.lakebase_project_id}/branches/production/databases/databricks-postgres"
             permission: CAN_CONNECT_AND_CREATE
+        - name: llm-gateway
+          serving_endpoint:
+            name: ${resources.model_serving_endpoints.llm_gateway.name}
+            permission: CAN_QUERY
 
 
   # postgres_projects omitido: bug #5183 — siempre hace POST,
